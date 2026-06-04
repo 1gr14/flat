@@ -1,8 +1,17 @@
 {
   "name": "@1gr14/flat",
   "version": "0.0.0",
-  "description": "TODO: one sentence — what this library is and what makes it different.",
+  "description": "Flatten and unflatten nested objects, and convert them to and from URL query strings — arrays, deep nesting, and custom value encoding.",
   "keywords": [
+    "query-string",
+    "querystring",
+    "flatten",
+    "unflatten",
+    "nested-objects",
+    "serialize",
+    "url",
+    "search-params",
+    "bracket-notation",
     "typescript"
   ],
   "license": "MIT",

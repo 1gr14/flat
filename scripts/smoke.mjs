@@ -1,6 +1,6 @@
 // Post-build smoke test: verifies the published artifact loads under plain Node
 // and that the package "exports" map resolves. Adapt the assertion to your library.
-import { greet } from '../dist/index.js'
+import { serialize, parse } from '../dist/index.js'
 
 const assert = (cond, msg) => {
   if (!cond) {
@@ -9,6 +9,10 @@ const assert = (cond, msg) => {
   }
 }
 
-assert(greet('world') === 'Hello, world!', 'greet() should work from the built package')
+const flat = serialize({ user: { name: 'Ada' } })
+assert(flat['user[name]'] === 'Ada', 'serialize() should flatten nested keys')
+
+const obj = parse('a=1&b=2')
+assert(obj.a === '1' && obj.b === '2', 'parse() should rebuild the object')
 
 console.log('smoke ok')
