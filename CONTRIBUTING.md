@@ -51,15 +51,15 @@ We use [Conventional Commits](https://www.conventionalcommits.org/). Versions
 and the changelog are generated from them, so the format matters.
 
 ```
-feat: add greet helper
-fix: handle empty name input
-docs: clarify usage example
+feat: add arrayIndexes option
+fix: handle repeated keys in parse
+docs: clarify FormData example
 ```
 
 Mark a breaking change with `!`:
 
 ```
-feat!: rename greet() to hello()
+feat!: make arrayIndexes false by default
 ```
 
 That's it. Open the PR and we'll take it from there.
