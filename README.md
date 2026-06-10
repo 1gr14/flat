@@ -142,9 +142,8 @@ const flatEntries = Object.fromEntries(
 deserialize(flatEntries) // { user: { name: 'Ada', since: Date }, avatar: File }
 ```
 
-This is exactly what [`Point0`](https://github.com/devp0nt/point0) does: run the
-body through its serializer, flatten with `flat`, then append — files as
-`Blob`s, everything else encoded.
+This is exactly what `Point0` does: run the body through its serializer, flatten
+with `flat`, then append — files as `Blob`s, everything else encoded.
 
 ## Array keys
 
@@ -216,7 +215,8 @@ takes `fromPrimitiveString`.
 
 Questions, bugs, or want to hang with other builders? Join the 1gr14 community —
 one hub for all our open-source projects, this one included. Get help, share
-what you built, or just say hi: [p0nt.dev/community](https://p0nt.dev/community)
+what you built, or just say hi:
+[1gr14.dev/community](https://1gr14.dev/community)
 
 ## Contributing
 
