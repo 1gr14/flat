@@ -1,6 +1,6 @@
 {
   "name": "@1gr14/flat",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Flatten and unflatten nested objects, and convert them to and from URL query strings — arrays, deep nesting, and custom value encoding.",
   "keywords": [
     "query-string",
