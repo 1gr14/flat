@@ -1,7 +1,8 @@
 # @1gr14/flat
 
-> Flatten nested objects, and turn them into URL query strings and back —
-> arrays, deep nesting, and custom encoding included.
+> Flatten a nested object into flat `key → value` pairs and back — the one piece
+> of code behind both URL query strings and multipart `FormData`. Arrays, deep
+> nesting, files, and custom encoding included.
 
 [![CI](https://github.com/1gr14/flat/actions/workflows/ci.yml/badge.svg)](https://github.com/1gr14/flat/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@1gr14/flat.svg)](https://www.npmjs.com/package/@1gr14/flat)
@@ -11,33 +12,43 @@
 
 <!-- docs:start -->
 
-URL query strings and multipart `FormData` only carry a flat list of
-`key → value` pairs. `flat` exists to push **nested** objects through them: it
-flattens an object to bracket-notation keys on one side and rebuilds it on the
-other. Use `stringify` / `parse` for query strings, and `serialize` /
-`deserialize` for `FormData`. Arrays, deep nesting, and repeated keys just work;
-`File` / `Blob` values travel inside `FormData` untouched; and prototype
-pollution is blocked.
+URL query strings and multipart `FormData` look like two different problems, but
+underneath they're the same one: each can only carry a **flat** list of
+`key → value` pairs. To push a **nested** object through either, you flatten it
+to bracket-notation keys on one side and rebuild it on the other — and that work
+is byte-for-byte identical whether the destination is a URL or a `FormData`.
+
+`qs` does the query-string half well, but it's heavier and aimed only at search
+params. Building the [Point0](https://1gr14.dev/point0) framework, I needed to
+flatten _any_ object for both a search string and a `FormData` body — the same
+code, two transports — so it belongs in one small package. That's `flat`.
+
+Two pairs of functions, one for each transport. `serialize` / `deserialize` give
+you the flat bracket-notation map (what you feed to `FormData`); `stringify` /
+`parse` add URL encoding on top and hand you a query string. Arrays, deep
+nesting, and repeated keys just work; `File` / `Blob` values ride along inside
+`FormData` untouched; and prototype-polluting keys are dropped.
 
 ```ts
 import { serialize, deserialize, stringify, parse } from '@1gr14/flat'
 
 const obj = { q: 'shoes', filters: { price: { min: 10 } }, tags: ['a', 'b'] }
 
-// nested object ⇄ URL query string
-const stringified = stringify(obj)
-// 'q=shoes&filters[price][min]=10&tags[0]=a&tags[1]=b' (brackets URL-encoded)
-
-const parsed = parse(stringified)
-// { q: 'shoes', filters: { price: { min: '10' } }, tags: ['a', 'b'] }  — all strings
-
 // nested object ⇄ flat bracket-notation map (what you append to FormData)
 const serialized = serialize(obj)
-// { q: 'shoes', 'filters[price][min]': 10, 'tags[0]': 'a', 'tags[1]': 'b' }
-
+// { q: 'shoes', 'filters[price][min]': 10, 'tags[0]': 'a', 'tags[1]': 'b' }  — types kept
 const deserialized = deserialize(serialized)
-// { q: 'shoes', filters: { price: { min: 10 } }, tags: ['a', 'b'] }  — types kept
+// { q: 'shoes', filters: { price: { min: 10 } }, tags: ['a', 'b'] }
+
+// nested object ⇄ URL query string
+const stringified = stringify(obj)
+// 'q=shoes&filters[price][min]=10&tags[0]=a&tags[1]=b'  (brackets URL-encoded)
+const parsed = parse(stringified)
+// { q: 'shoes', filters: { price: { min: '10' } }, tags: ['a', 'b'] }  — all strings
 ```
+
+All four are also bundled on a `flat` namespace (`flat.serialize`, …), which is
+the package's default export — handy if you'd rather not name every import.
 
 ## Install
 
@@ -48,35 +59,31 @@ bun add @1gr14/flat
 
 Bun 1+ or Node.js 20+. ESM only.
 
-## One core, two transports
-
-Query strings and `FormData` look like different problems, but the work
-underneath is identical: walk a nested object into flat bracket-notation keys,
-and walk it back. `stringify` / `parse` add URL encoding on top of that core;
-`serialize` / `deserialize` hand you the flat map directly (what you feed to
-`FormData`). Same utilities either way — so it's one package, not two repos
-duplicating the same logic.
-
 ## Query strings: `stringify` and `parse`
 
 `stringify` turns a nested object into a query string; `parse` turns it back.
-Arrays and nested objects round-trip:
+Arrays and nested objects round-trip, and repeated keys collapse into an array:
 
 ```ts
 stringify({ x: '1', deep: { y: 2 }, list: ['a', 'b'] })
-// 'x=1&deep[y]=2&list[0]=a&list[1]=b'
+// 'x=1&deep[y]=2&list[0]=a&list[1]=b'  (brackets URL-encoded)
 
 parse('x=1&deep[y]=2&list[0]=a&list[1]=b')
 // { x: '1', deep: { y: '2' }, list: ['a', 'b'] }
 
-// repeated keys collapse into an array
-parse('a=1&a=2') // { a: ['1', '2'] }
+parse('a=1&a=2') // { a: ['1', '2'] }  — repeated keys → array
 ```
+
+`parse` accepts a string with or without a leading `?`, decodes percent-escapes,
+and reads `+` as a space. Every parsed value is a **string** — query strings
+carry no types — so coerce on your side, or use `fromPrimitiveString` (below).
 
 ## Flatten: `serialize` and `deserialize`
 
 Need the flat key/value map instead of a string? `serialize` flattens a nested
-object to bracket-notation keys; `deserialize` rebuilds it:
+object to bracket-notation keys; `deserialize` rebuilds it. Unlike a query
+string, this keeps the original leaf **values** as-is — numbers stay numbers,
+and a `File` stays a `File`:
 
 ```ts
 serialize({ x: 1, user: { profile: { name: 'john' } }, z: ['a', 'b'] })
@@ -86,9 +93,13 @@ deserialize({ 'user[profile][name]': 'john', 'z[0]': 'a', 'z[1]': 'b' })
 // { user: { profile: { name: 'john' } }, z: ['a', 'b'] }
 ```
 
+`deserialize` drops the prototype-polluting keys `__proto__`, `prototype`, and
+`constructor`, so it's safe to run on untrusted input. (`serialize` skips them
+too.)
+
 ## FormData
 
-`FormData` is flat too — and unlike a query string it can carry files.
+`FormData` is flat as well — and unlike a query string it can carry files.
 `serialize` flattens your object while keeping `File` / `Blob` values intact, so
 you append each entry as-is; on the server, read the entries back and
 `deserialize`:
@@ -145,26 +156,31 @@ deserialize(flatEntries) // { user: { name: 'Ada', since: Date }, avatar: File }
 This is exactly what `Point0` does: run the body through its serializer, flatten
 with `flat`, then append — files as `Blob`s, everything else encoded.
 
-## Array keys
+## Array keys: `arrayIndexes`
 
-By default arrays use numeric indexes (`tags[0]`). Pass `arrayIndexes: false`
-for empty brackets (`tags[]`) instead:
+By default arrays use numeric indexes (`tags[0]`), which round-trip in order.
+Pass `arrayIndexes: false` for empty brackets (`tags[]`) instead — the form many
+backends and HTML forms expect:
 
 ```ts
 serialize({ tags: ['x', 'y'] }) // { 'tags[0]': 'x', 'tags[1]': 'y' }
 serialize({ tags: ['x', 'y'] }, { arrayIndexes: false }) // { 'tags[]': ['x', 'y'] }
 ```
 
-## Custom value encoding
+`stringify` takes the same option, since it flattens through `serialize` first.
 
-`stringify` takes `toPrimitiveString` to control how each value is written —
-return `undefined` to drop a key. `parse` takes the inverse,
-`fromPrimitiveString`:
+## Custom value encoding: `toPrimitiveString` / `fromPrimitiveString`
+
+`stringify` writes each leaf with `toPrimitiveString`, and you can override it
+to control exactly how values are written — return `undefined` to drop a key
+entirely. `parse` takes the inverse, `fromPrimitiveString`, to post-process each
+decoded value:
 
 ```ts
 stringify(
   { id: 7, enabled: true, secret: 'skip-me' },
   {
+    encode: false,
     toPrimitiveString: (value) =>
       value === 'skip-me' ? undefined : `v:${value}`,
   },
@@ -172,37 +188,30 @@ stringify(
 // 'id=v:7&enabled=v:true'  — `secret` dropped
 ```
 
-## Unencoded output
+The default `toPrimitiveString` is exported too, so you can wrap it instead of
+reimplementing it: it stringifies numbers/booleans/bigints, `JSON.stringify`s
+objects, and drops `null` / `undefined` / blank strings.
+
+## Unencoded output: `encode`
 
 By default `stringify` percent-encodes keys and values. Pass `encode: false` for
-a human-readable query string (handy for prettier URLs). Note: unencoded output
-can be ambiguous when keys/values contain `&`, `=`, or `?`.
+a human-readable query string — handy for prettier URLs. Note: unencoded output
+can be ambiguous when keys or values contain `&`, `=`, or `?`.
 
 ```ts
 stringify({ user: { name: 'Ada' } }) // 'user%5Bname%5D=Ada'
 stringify({ user: { name: 'Ada' } }, { encode: false }) // 'user[name]=Ada'
 ```
 
-## Depth limit
+## Depth limit: `maxDepth`
 
 Every function takes `maxDepth` (default `64`). Paths deeper than the limit stay
-flat instead of nesting — a guard against pathological input.
+flat instead of nesting — a guard against pathological input:
 
-## API reference
-
-| Call                           | Result                                                 |
-| ------------------------------ | ------------------------------------------------------ |
-| `serialize(input, options?)`   | Nested object → flat bracket-notation object.          |
-| `deserialize(input, options?)` | Flat object → nested object.                           |
-| `stringify(input, options?)`   | Nested object → URL query string.                      |
-| `parse(input, options?)`       | Query string → nested object.                          |
-| `toPrimitiveString(value)`     | Default value-to-string used by `stringify`.           |
-| `flat`                         | Namespace bundling all four (also the default export). |
-
-**Options:** `serialize` / `stringify` take `arrayIndexes` (default `true`) and
-`maxDepth` (default `64`); `stringify` also takes `toPrimitiveString` and
-`encode` (default `true`). `parse` / `deserialize` take `maxDepth`; `parse` also
-takes `fromPrimitiveString`.
+```ts
+stringify({ a: { b: { c: 1 } } }, { maxDepth: 2, encode: false }) // 'a[b]={"c":1}'
+deserialize({ 'a[b][c]': '1' }, { maxDepth: 2 }) // { 'a[b][c]': '1' }  — kept flat
+```
 
 ## Requirements
 
@@ -216,7 +225,7 @@ takes `fromPrimitiveString`.
 Questions, bugs, or want to hang with other builders? Join the 1gr14 community —
 one hub for all our open-source projects, this one included. Get help, share
 what you built, or just say hi:
-[1gr14.dev/community](https://1gr14.dev/community)
+[1gr14.dev/#community](https://1gr14.dev/#community)
 
 ## Contributing
 
@@ -231,8 +240,5 @@ Issues and PRs welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) and the
 
 ---
 
-```text
-Building open-source software for the glory of the Lord Jesus Christ ☦️
-With love for developers of all backgrounds around the world ❤️
-Sergei Dmitriev, 2026 😎
-```
+Made by [1gr14](https://1gr14.dev), driven by
+[community](https://1gr14.dev/#community)
